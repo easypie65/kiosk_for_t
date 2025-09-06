@@ -1,24 +1,21 @@
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/database';
+// services/firebase.ts  (v9 모듈식)
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
+// 필요 시: import { getStorage } from 'firebase/storage';
 
-// Firebase configuration provided for the Kiosk App project.
 const firebaseConfig = {
-  apiKey: "AIzaSyDaxXOrVCXn2T8nzxy05RZLNB8rVcuhYjg",
-  authDomain: "teacherkiosk.firebaseapp.com",
-  databaseURL: "https://teacherkiosk-default-rtdb.firebaseio.com",
-  projectId: "teacherkiosk",
-  storageBucket: "teacherkiosk.firebasestorage.app",
-  messagingSenderId: "572519882920",
-  appId: "1:572519882920:web:63f5a7af3527cc029c629d",
-  measurementId: "G-Z71GFPD20D"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MSG_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
+const app = initializeApp(firebaseConfig);
 
-const database = firebase.database();
-export const visitsRef = database.ref('visits');
-
-export default firebase;
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+// export const storage = getStorage(app);
+export default app;
