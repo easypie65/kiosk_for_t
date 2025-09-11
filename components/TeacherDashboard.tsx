@@ -2,34 +2,54 @@ import React from 'react';
 import { useFirebaseQueue } from '../hooks/useQueueFirebase';
 import { Visit, VisitStatus } from '../types';
 
-const TeacherVisitCard: React.FC<{
+const VisitRow: React.FC<{
   visit: Visit;
   onUpdate: (id: string, status: VisitStatus) => void;
   onComplete: (id: string) => void;
-  isCallDisabled?: boolean;
+  isCallDisabled: boolean;
 }> = ({ visit, onUpdate, onComplete, isCallDisabled }) => {
+  const getStatusBadge = (status: VisitStatus) => {
+    switch (status) {
+      case VisitStatus.PENDING:
+        return <span className="px-2 py-1 text-xs font-semibold text-yellow-800 bg-yellow-100 rounded-full">승인 대기</span>;
+      case VisitStatus.APPROVED:
+        return <span className="px-2 py-1 text-xs font-semibold text-indigo-800 bg-indigo-100 rounded-full">승인됨</span>;
+      case VisitStatus.SERVING:
+        return <span className="px-2 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full animate-pulse">호출 중</span>;
+      default:
+        return null;
+    }
+  };
+
+  const rowClass = visit.status === VisitStatus.SERVING ? 'bg-green-50' : 'bg-white';
+  const buttonBaseClass = "w-20 text-center px-3 py-1 text-sm font-semibold rounded-md transition-colors";
+
   return (
-    <div className={`bg-white p-4 rounded-lg shadow-sm border ${visit.status === VisitStatus.SERVING ? 'border-green-400 border-2' : 'border-slate-200'}`}>
-      <div className="flex justify-between items-start">
-        <div>
-          <p className="font-bold text-slate-800">
-             {visit.grade}학년 {visit.classNum ? `${visit.classNum}반 ` : ''}{visit.name}
-          </p>
-          <p className="text-sm text-slate-500">{visit.teacher}</p>
-          <p className="text-sm text-indigo-600 mt-1">{visit.purpose}</p>
-        </div>
-        <div className="flex flex-col items-end space-y-2 flex-shrink-0 ml-2">
+    <tr className={`${rowClass} border-b border-slate-200`}>
+      <td className="px-4 py-3 text-sm text-slate-500 whitespace-nowrap">
+        {new Date(visit.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+      </td>
+      <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">
+        {visit.grade}학년 {visit.classNum ? `${visit.classNum}반 ` : ''}{visit.name}
+      </td>
+      <td className="px-4 py-3 text-sm text-slate-600">{visit.purpose}</td>
+      <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">{visit.teacher}</td>
+      <td className="px-4 py-3 whitespace-nowrap">
+        {getStatusBadge(visit.status)}
+      </td>
+      <td className="px-4 py-3 text-right whitespace-nowrap">
+        <div className="flex items-center justify-end space-x-2">
           {visit.status === VisitStatus.PENDING && (
             <>
               <button
                 onClick={() => onUpdate(visit.id, VisitStatus.APPROVED)}
-                className="bg-blue-500 text-white w-20 text-center px-3 py-1 text-sm font-semibold rounded-md hover:bg-blue-600 transition-colors"
+                className={`${buttonBaseClass} bg-blue-500 text-white hover:bg-blue-600`}
               >
                 승인
               </button>
               <button
                 onClick={() => onComplete(visit.id)}
-                className="bg-slate-400 text-white w-20 text-center px-3 py-1 text-sm font-semibold rounded-md hover:bg-slate-500 transition-colors"
+                className={`${buttonBaseClass} bg-slate-400 text-white hover:bg-slate-500`}
               >
                 삭제
               </button>
@@ -40,13 +60,13 @@ const TeacherVisitCard: React.FC<{
              <button
                 onClick={() => onUpdate(visit.id, VisitStatus.SERVING)}
                 disabled={isCallDisabled}
-                className="bg-green-500 text-white w-20 text-center px-3 py-1 text-sm font-semibold rounded-md hover:bg-green-600 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed"
+                className={`${buttonBaseClass} bg-green-500 text-white hover:bg-green-600 disabled:bg-slate-300 disabled:cursor-not-allowed`}
               >
                 호출
               </button>
                <button
                 onClick={() => onComplete(visit.id)}
-                className="bg-slate-400 text-white w-20 text-center px-3 py-1 text-sm font-semibold rounded-md hover:bg-slate-500 transition-colors"
+                className={`${buttonBaseClass} bg-slate-400 text-white hover:bg-slate-500`}
               >
                 삭제
               </button>
@@ -55,29 +75,21 @@ const TeacherVisitCard: React.FC<{
           {visit.status === VisitStatus.SERVING && (
             <button
               onClick={() => onComplete(visit.id)}
-              className="bg-red-500 text-white w-20 text-center px-3 py-1 text-sm font-semibold rounded-md hover:bg-red-600 transition-colors"
+              className={`${buttonBaseClass} bg-red-500 text-white hover:bg-red-600`}
             >
               완료
             </button>
           )}
         </div>
-      </div>
-      {visit.status === VisitStatus.SERVING && (
-        <div className="mt-2 pt-2 border-t border-slate-200 text-right">
-          <span className="text-green-600 font-bold text-sm animate-pulse">
-            <i className="fa-solid fa-volume-high mr-2"></i>
-            학생 호출 중...
-          </span>
-        </div>
-      )}
-    </div>
+      </td>
+    </tr>
   );
 };
 
+
 export const TeacherDashboard: React.FC = () => {
   const { 
-    pendingQueue, 
-    approvedQueue,
+    visits,
     currentlyServing,
     isLoading, 
     error,
@@ -85,91 +97,57 @@ export const TeacherDashboard: React.FC = () => {
     completeVisit
   } = useFirebaseQueue();
   
-  // Sort approved queue by timestamp ASC (oldest first) to create a proper waiting line.
-  const nextInQueue = [...approvedQueue].sort((a, b) => a.timestamp - b.timestamp);
+  const sortedVisits = [...visits].sort((a, b) => a.timestamp - b.timestamp);
   
   const isCallDisabled = !!currentlyServing;
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 sm:p-6 md:p-8">
+    <div className="min-h-screen bg-slate-100 p-4 sm:p-6 md:p-8">
       <div className="max-w-7xl mx-auto">
         <header className="mb-8">
-          <h1 className="text-4xl font-extrabold text-slate-800">교무실 방문 관리</h1>
-          <p className="text-slate-500 mt-1">실시간으로 학생들의 방문 요청을 확인하고 관리합니다.</p>
+          <h1 className="text-4xl font-extrabold text-slate-800">교무실 방문 관리 대시보드</h1>
+          <p className="text-slate-500 mt-1">학생들의 방문 요청을 실시간으로 확인하고 관리합니다.</p>
         </header>
 
         {isLoading && <p className="text-center text-lg">데이터를 불러오는 중입니다...</p>}
         {error && <p className="text-center text-lg text-red-500 bg-red-100 p-4 rounded-lg">{error}</p>}
         
         {!isLoading && !error && (
-          <>
-            {/* Currently Serving Section */}
-            <section className="mb-8">
-              <h2 className="text-2xl font-bold text-slate-700 mb-4 pb-2 border-b-2 border-green-400">
-                <i className="fa-solid fa-bell mr-2 text-green-500"></i>
-                현재 호출 중
-              </h2>
-              <div className="p-2 bg-green-50 rounded-lg min-h-[120px] flex items-center justify-center">
-                {currentlyServing ? (
-                  <div className="w-full max-w-lg">
-                    <TeacherVisitCard 
-                      key={currentlyServing.id} 
-                      visit={currentlyServing} 
-                      onUpdate={updateVisitStatus} 
-                      onComplete={completeVisit}
-                    />
-                  </div>
-                ) : (
-                  <p className="text-center text-slate-500 p-4">호출 중인 학생이 없습니다.</p>
-                )}
-              </div>
-            </section>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Pending Column */}
-              <section>
-                <h2 className="text-2xl font-bold text-slate-700 mb-4 pb-2 border-b-2 border-yellow-400">
-                  <i className="fa-solid fa-user-plus mr-2 text-yellow-500"></i>
-                  승인 대기 ({pendingQueue.length})
-                </h2>
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto p-2 bg-slate-100 rounded-lg">
-                  {pendingQueue.length > 0 ? (
-                    pendingQueue.map(v => 
-                      <TeacherVisitCard 
-                        key={v.id} 
-                        visit={v} 
-                        onUpdate={updateVisitStatus}
-                        onComplete={completeVisit} 
-                      />)
-                  ) : (
-                    <p className="text-center text-slate-500 p-4">신규 접수한 학생이 없습니다.</p>
-                  )}
+            <div className="bg-white rounded-xl shadow-md overflow-hidden border border-slate-200">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-slate-500">
+                        <thead className="text-xs text-slate-700 uppercase bg-slate-100 border-b border-slate-200">
+                            <tr>
+                                <th scope="col" className="px-4 py-3">시간</th>
+                                <th scope="col" className="px-4 py-3">학생 정보</th>
+                                <th scope="col" className="px-4 py-3">방문 목적</th>
+                                <th scope="col" className="px-4 py-3">담당 교사</th>
+                                <th scope="col" className="px-4 py-3">상태</th>
+                                <th scope="col" className="px-4 py-3 text-right">관리</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sortedVisits.length > 0 ? (
+                                sortedVisits.map(visit => (
+                                    <VisitRow 
+                                        key={visit.id}
+                                        visit={visit}
+                                        onUpdate={updateVisitStatus}
+                                        onComplete={completeVisit}
+                                        isCallDisabled={isCallDisabled}
+                                    />
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={6} className="text-center py-10 text-slate-500">
+                                        현재 대기 중인 학생이 없습니다.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
-              </section>
-
-              {/* Approved (Next in Queue) Column */}
-              <section>
-                <h2 className="text-2xl font-bold text-slate-700 mb-4 pb-2 border-b-2 border-indigo-400">
-                  <i className="fa-solid fa-user-check mr-2 text-indigo-500"></i>
-                  다음 대기열 ({nextInQueue.length})
-                </h2>
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto p-2 bg-slate-100 rounded-lg">
-                  {nextInQueue.length > 0 ? (
-                    nextInQueue.map(v => 
-                      <TeacherVisitCard 
-                        key={v.id} 
-                        visit={v} 
-                        onUpdate={updateVisitStatus} 
-                        onComplete={completeVisit}
-                        isCallDisabled={isCallDisabled}
-                      />)
-                  ) : (
-                    <p className="text-center text-slate-500 p-4">대기 중인 학생이 없습니다.</p>
-                  )}
-                </div>
-              </section>
             </div>
-          </>
         )}
       </div>
     </div>
